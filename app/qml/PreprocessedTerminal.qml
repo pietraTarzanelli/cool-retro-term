@@ -41,6 +41,9 @@ Item{
     property alias title: ksession.title
     property alias kterminal: kterminal
     property bool isActive: false
+    property string contextLink: ""
+    property bool usesTmux: false
+    property string tmuxSessionName: ""
 
     property size terminalSize: kterminal.terminalSize
     property size fontMetrics: kterminal.fontMetrics
@@ -91,6 +94,13 @@ Item{
 
     function updateSources() {
         kterminal.update()
+    }
+
+    // Returns whether a foreground command is currently running in this terminal.
+    function hasActiveProcess() {
+        if (usesTmux && tmuxSessionName !== "")
+            return tmuxController.hasActiveProcess(tmuxSessionName)
+        return ksession ? ksession.hasActiveProcess : false
     }
 
     QMLTermWidget {
@@ -167,17 +177,59 @@ Item{
         }
 
         function startSession() {
+            var program = "";
+            var programArgs = [];
+
             // Retrieve the variable set in main.cpp if arguments are passed.
             if (defaultCmd) {
-                ksession.setShellProgram(defaultCmd);
-                ksession.setArgs(defaultCmdArgs);
+                program = defaultCmd;
+                programArgs = defaultCmdArgs || [];
             } else if (appSettings.useCustomCommand) {
                 var args = Utils.tokenizeCommandLine(appSettings.customCommand);
-                ksession.setShellProgram(args[0]);
-                ksession.setArgs(args.slice(1));
-            } else if (!defaultCmd && appSettings.isMacOS) {
+                if (args.length > 0) {
+                    program = args[0];
+                    programArgs = args.slice(1);
+                }
+            } else if (appSettings.isMacOS) {
                 // OSX Requires the following default parameters for auto login.
-                ksession.setArgs(["-i", "-l"]);
+                programArgs = ["-i", "-l"];
+            }
+
+            var wrapInTmux = tmuxSessionName !== "" && tmuxController.isAvailable();
+            if (wrapInTmux) {
+                // The shell greeting runs before attach-session resizes the pane.
+                // Give the detached session the actual terminal dimensions upfront.
+                var tmuxArgs = ["-T", "clipboard", "new-session", "-A", "-d",
+                                "-x", String(Math.max(1, kterminal.terminalSize.width)),
+                                "-y", String(Math.max(1, kterminal.terminalSize.height)),
+                                "-s", tmuxSessionName];
+                if (workdir)
+                    tmuxArgs.push("-c", workdir);
+                if (program !== "") {
+                    tmuxArgs.push(program);
+                    tmuxArgs = tmuxArgs.concat(programArgs);
+                }
+                tmuxArgs.push(";", "set-option", "-q", "-t", tmuxSessionName,
+                              "mouse", "on");
+                tmuxArgs.push(";", "set-option", "-s", "set-clipboard", "on");
+                tmuxArgs.push(";", "set-option", "-t", tmuxSessionName,
+                              "set-titles", "on");
+                tmuxArgs.push(";", "set-option", "-t", tmuxSessionName,
+                              "set-titles-string",
+                              "#{?pane_title,#{pane_title},#{session_name}}");
+                // Extra split aliases: / matches % (side by side), = matches " (stacked).
+                tmuxArgs.push(";", "bind-key", "/", "split-window", "-h");
+                tmuxArgs.push(";", "bind-key", "=", "split-window", "-v");
+                tmuxArgs.push(";", "attach-session", "-t", tmuxSessionName);
+                ksession.setShellProgram("tmux");
+                ksession.setArgs(tmuxArgs);
+                usesTmux = true;
+            } else {
+                if (program !== "")
+                    ksession.setShellProgram(program);
+                if (programArgs.length > 0)
+                    ksession.setArgs(programArgs);
+                usesTmux = false;
             }
 
             if (workdir)
@@ -193,6 +245,8 @@ Item{
         }
         Component.onDestruction: {
             appSettings.fontManager.terminalFontChanged.disconnect(handleFontChanged);
+            if (usesTmux && tmuxSessionName !== "")
+                tmuxController.killSession(tmuxSessionName);
         }
     }
 
@@ -213,6 +267,7 @@ Item{
     property alias contextmenu: menuLoader.item
 
     MouseArea {
+        property bool interceptedPress: false
         property real margin: appSettings.margin
         property real frameSize: appSettings.frameSize * terminalWindow.normalizedWindowScale
 
@@ -232,8 +287,16 @@ Item{
             kterminal.simulateMouseDoubleClick(coord.x, coord.y, mouse.button, mouse.buttons, mouse.modifiers);
         }
         onPressed: function(mouse) {
+            interceptedPress = false;
             kterminal.forceActiveFocus()
-            if ((!kterminal.terminalUsesMouse || mouse.modifiers & Qt.ShiftModifier) && mouse.button == Qt.RightButton) {
+            var coord = correctDistortion(mouse.x, mouse.y);
+            contextLink = kterminal.linkAt(coord.x, coord.y);
+            if (mouse.button == Qt.LeftButton && (mouse.modifiers & Qt.ControlModifier) && contextLink !== "") {
+                interceptedPress = true;
+                Qt.openUrlExternally(contextLink);
+            } else if (mouse.button == Qt.RightButton &&
+                       (contextLink !== "" || !kterminal.terminalUsesMouse || (mouse.modifiers & Qt.ShiftModifier))) {
+                interceptedPress = true;
                 contextmenu.popup();
             } else {
                 var coord = correctDistortion(mouse.x, mouse.y);
@@ -241,6 +304,10 @@ Item{
             }
         }
         onReleased: function(mouse) {
+            if (interceptedPress) {
+                interceptedPress = false;
+                return;
+            }
             var coord = correctDistortion(mouse.x, mouse.y);
             kterminal.simulateMouseRelease(coord.x, coord.y, mouse.button, mouse.buttons, mouse.modifiers);
         }

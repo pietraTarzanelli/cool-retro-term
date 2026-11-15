@@ -5,6 +5,7 @@
 #include <QStringList>
 
 #include <QDir>
+#include <QFileInfo>
 
 #include <QtWidgets/QApplication>
 #include <QIcon>
@@ -21,6 +22,7 @@
 #include <fileio.h>
 #include <fontlistmodel.h>
 #include <fontmanager.h>
+#include <tmuxcontroller.h>
 
 #if defined(Q_OS_MAC)
 #include <CoreFoundation/CoreFoundation.h>
@@ -100,6 +102,7 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     FileIO fileIO;
+    TmuxController tmuxController;
 
     qmlRegisterType<FontManager>("CoolRetroTerm", 1, 0, "FontManager");
     qmlRegisterUncreatableType<FontListModel>("CoolRetroTerm", 1, 0, "FontListModel", "FontListModel is created by FontManager");
@@ -129,9 +132,13 @@ int main(int argc, char *argv[])
 
     engine.rootContext()->setContextProperty("workdir", getNamedArgument(args, "--workdir", QDir::currentPath()));
     engine.rootContext()->setContextProperty("fileIO", &fileIO);
+    engine.rootContext()->setContextProperty("tmuxController", &tmuxController);
 
     // Manage import paths for Linux and OSX.
     QStringList importPathList = engine.importPathList();
+    // Resolve launcher symlinks so the bundled module is found beside the binary.
+    const QString binaryDir = QFileInfo(QCoreApplication::applicationFilePath()).canonicalPath();
+    importPathList.append(binaryDir + "/qmltermwidget");
     importPathList.append(QCoreApplication::applicationDirPath() + "/qmltermwidget");
     importPathList.append(QCoreApplication::applicationDirPath() + "/../PlugIns");
     importPathList.append(QCoreApplication::applicationDirPath() + "/../../../qmltermwidget");

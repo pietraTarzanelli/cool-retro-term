@@ -1,3 +1,4 @@
+#!/usr/bin/env xdg-open
 [Desktop Entry]
 Comment=Use the command line the old way
 Exec=cool-retro-term
@@ -10,6 +11,7 @@ Terminal=false
 Type=Application
 Keywords=shell;prompt;command;commandline;
 Actions=NewWindow;
+
 
 [Desktop Action NewWindow]
 Name=New Window

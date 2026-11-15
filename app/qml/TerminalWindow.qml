@@ -20,6 +20,8 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 
 import "menus"
 
@@ -168,6 +170,26 @@ ApplicationWindow {
         context: Qt.WindowShortcut
         onActivated: if (terminalTabs.count > 8) terminalTabs.currentIndex = 8
     }
+    Shortcut {
+        sequence: "Ctrl+Tab"
+        context: Qt.WindowShortcut
+        onActivated: {
+            if (terminalTabs.count > 1) {
+                terminalTabs.currentIndex = (terminalTabs.currentIndex + 1) % terminalTabs.count
+                terminalTabs.forceActiveFocusCurrentTab()
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+Tab"
+        context: Qt.WindowShortcut
+        onActivated: {
+            if (terminalTabs.count > 1) {
+                terminalTabs.currentIndex = (terminalTabs.currentIndex - 1 + terminalTabs.count) % terminalTabs.count
+                terminalTabs.forceActiveFocusCurrentTab()
+            }
+        }
+    }
     TerminalTabs {
         id: terminalTabs
         width: parent.width
@@ -181,7 +203,97 @@ ApplicationWindow {
             terminalSize: terminalTabs.terminalSize
         }
     }
-    onClosing: {
-        appRoot.closeWindow(terminalWindow)
+    Dialog {
+        id: closeConfirmDialog
+
+        property bool canCloseSingleTab: false
+
+        anchors.centerIn: parent
+        modal: true
+        title: qsTr("  Close cool-retro-term?")
+        width: 420
+        contentWidth: availableWidth
+
+        header: ColumnLayout {
+            spacing: 0
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    text: closeConfirmDialog.title
+                    elide: Text.ElideRight
+                    font.bold: true
+                }
+
+                ToolButton {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    text: qsTr("Close")
+                    icon.name: "tab-close"
+                    display: AbstractButton.IconOnly
+                    onClicked: closeConfirmDialog.reject()
+                }
+            }
+
+            Kirigami.Separator {
+                Layout.fillWidth: true
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: closeConfirmDialog.canCloseSingleTab ? qsTr(
+                                                                "There are %1 open tabs. Do you want to close the whole terminal or only the current tab?").arg(
+                                                                terminalTabs.count) : qsTr(
+                                                                "A process is still running. Do you want to close the terminal?")
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 6
+
+                Button {
+                    text: qsTr("Close Terminal")
+                    onClicked: {
+                        closeConfirmDialog.close()
+                        appRoot.closeWindow(terminalWindow)
+                    }
+                }
+                Button {
+                    text: qsTr("Close Current Tab")
+                    visible: closeConfirmDialog.canCloseSingleTab
+                    contentItem: Label {
+                        text: parent.text
+                        color: parent.palette.highlight
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        closeConfirmDialog.close()
+                        terminalTabs.closeCurrentTab()
+                    }
+                }
+                Button {
+                    text: qsTr("Cancel")
+                    onClicked: closeConfirmDialog.close()
+                }
+            }
+        }
+    }
+    onClosing: function(close) {
+        if (terminalTabs.shouldConfirmWindowClose()) {
+            close.accepted = false
+            closeConfirmDialog.canCloseSingleTab = terminalTabs.count > 1
+            closeConfirmDialog.open()
+        } else {
+            appRoot.closeWindow(terminalWindow)
+        }
     }
 }

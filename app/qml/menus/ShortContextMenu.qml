@@ -23,9 +23,23 @@ import QtQuick.Controls 2.3
 Menu {
     id: contextmenu
     MenuItem {
+        text: qsTr("Open Link")
+        visible: terminalContainer.contextLink !== ""
+        onTriggered: Qt.openUrlExternally(terminalContainer.contextLink)
+    }
+    MenuItem {
+        text: qsTr("Copy Link Address")
+        visible: terminalContainer.contextLink !== ""
+        onTriggered: kterminal.copyLink(terminalContainer.contextLink)
+    }
+    MenuItem {
         action: copyAction
     }
     MenuItem {
         action: pasteAction
+    }
+    MenuSeparator {}
+    MenuItem {
+        action: showsettingsAction
     }
 }

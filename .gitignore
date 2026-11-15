@@ -35,6 +35,7 @@ Makefile*
 # Others
 
 *.xcf
+.directory
 
 # Ubuntu SDk
 *.excludes

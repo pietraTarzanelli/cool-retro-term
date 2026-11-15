@@ -26,6 +26,8 @@ ShaderTerminal {
     property alias title: terminal.title
     property alias terminalSize: terminal.terminalSize
     property bool isActive: false
+    property string tmuxSessionName: ""
+    readonly property bool usesTmux: terminal.usesTmux
     signal sessionFinished()
 
     property bool loadBloomEffect: appSettings.bloom > 0 || appSettings._frameShininess > 0
@@ -46,11 +48,22 @@ ShaderTerminal {
         id: terminal
         anchors.fill: parent
         isActive: mainShader.isActive
+        tmuxSessionName: mainShader.tmuxSessionName
         onSessionFinished: mainShader.sessionFinished()
     }
 
     function activate() {
         terminal.mainTerminal.forceActiveFocus()
+    }
+
+    function hasActiveProcess() {
+        return terminal.hasActiveProcess()
+    }
+
+    function splitPane(horizontal) {
+        if (usesTmux && tmuxSessionName !== "")
+            return tmuxController.splitPane(tmuxSessionName, horizontal)
+        return false
     }
 
     //  EFFECTS  ////////////////////////////////////////////////////////////////
