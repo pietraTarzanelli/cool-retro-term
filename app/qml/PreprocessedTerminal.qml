@@ -217,9 +217,11 @@ Item{
                 tmuxArgs.push(";", "set-option", "-t", tmuxSessionName,
                               "set-titles-string",
                               "#{?pane_title,#{pane_title},#{session_name}}");
-                // Extra split aliases: / matches % (side by side), = matches " (stacked).
+                // Extra aliases: / split side by side, = split stacked, f toggle float, F find window.
                 tmuxArgs.push(";", "bind-key", "/", "split-window", "-h");
                 tmuxArgs.push(";", "bind-key", "=", "split-window", "-v");
+                tmuxArgs.push(";", "bind-key", "f", "if-shell", "-F", "#{pane_floating_flag}", "join-pane", "break-pane -W");
+                tmuxArgs.push(";", "bind-key", "F", "command-prompt", "find-window -Z \"%%\"");
                 tmuxArgs.push(";", "attach-session", "-t", tmuxSessionName);
                 ksession.setShellProgram("tmux");
                 ksession.setArgs(tmuxArgs);
